@@ -30,6 +30,13 @@ exclude_types = c('dup', 'del', 'tra', 'inv')
 event_subset_n = Inf
 ## Per-event seeds are derived from this and the event id.
 sample_seed = 1L
+## Optional: several truths per event. NULL = one truth per event. Otherwise the
+## truth indices to run, e.g. 1:10: each event runs once per index, with its own
+## seed (from sample_seed, the event id and the index). The seed drives the truth
+## draw, the candidate sampling and the observation noise. Index 1 uses the
+## one-truth seed, so a one-truth run's results are truth 1 (2:10 adds truths to
+## it). Results carry a truth_index column.
+truth_indices = NULL
 ## Cores for reading the graphs when building the event table.
 graph_cores = 8L
 
@@ -76,6 +83,10 @@ time_scale = 2
 target_job_h = 2
 time_safety = 3
 time_pad_h = 2
+## Prefix for job ids (batch_id = <prefix>m<mem>_<n>, also the Slurm job name):
+## give runs that share the queue different prefixes, since 02_submit.R tells
+## its queued jobs apart by name.
+batch_prefix = ''
 
 ## -----------------------------------------------------------------------------
 ## Derived paths (no need to edit)

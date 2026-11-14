@@ -4,7 +4,8 @@
 ##
 ## Run by the Flow module (flow/fastkar_local_identifiability/run.sh) in its job
 ## directory, or by hand in any directory (scripts/smoke_test.R does this).
-## Each finished event is checkpointed to events/<event_id>.rds, so a rerun
+## Each finished event is checkpointed to events/<event_id>.rds (with a
+## truth_index column: events/<event_id>_truth<k>.rds), so a rerun
 ## (e.g. after an OOM kill) skips it. An event that errors writes
 ## events/<event_id>.failed; the job then fails after trying the rest of the
 ## bundle, and no bundle outputs are written.
@@ -71,12 +72,14 @@ if (!nrow(bundle)) stop('event_bundle has zero rows')
 required_cols = c('pair', 'event_id', 'cohort', 'type', 'gg', 'footprint', 'seed')
 missing_cols = setdiff(required_cols, names(bundle))
 if (length(missing_cols)) stop('event_bundle missing columns: ', paste(missing_cols, collapse = ', '))
-if (anyDuplicated(bundle$event_id)) stop('event_bundle has duplicated event_id rows')
+## One task per row: the event, or the event x truth_index with several truths.
+bundle[, task_id := if ('truth_index' %in% names(bundle)) paste0(event_id, '_truth', truth_index) else event_id]
+if (anyDuplicated(bundle$task_id)) stop('event_bundle has duplicated event_id (x truth_index) rows')
 
 event_dir = 'events'
 dir.create(event_dir, showWarnings = FALSE)
 event_file = function(e, ext = '.rds') file.path(event_dir, paste0(e, ext))
-done = file.exists(event_file(bundle$event_id))
+done = file.exists(event_file(bundle$task_id))
 message('Running local identifiability batch ', batch_id, ': ', nrow(bundle), ' events, ',
         sum(done), ' already done (checkpoints)')
 
@@ -87,32 +90,32 @@ RNGkind("L'Ecuyer-CMRG")
 # heap (copied into every forked worker) does not grow across the bundle.
 for (k in which(!done)) {
     ev = bundle[k]
-    unlink(event_file(ev$event_id, '.failed'))
+    unlink(event_file(ev$task_id, '.failed'))
     r = tryCatch({
         gg = readRDS(normalizePath(path.expand(ev$gg), mustWork = TRUE))
         if (!is.null(gg$copy)) gg = gg$copy
         do.call(fastKar:::run_graph_local_identifiability, c(list(
             graph = gg,
             footprint = streduce(parse.gr(strsplit(ev$footprint, ';', fixed = TRUE)[[1]])),
-            event = ev[, .(event_id, type, pair, cohort)],
+            event = ev[, intersect(c('event_id', 'type', 'pair', 'cohort', 'truth_index'), names(ev)), with = FALSE],
             seed = ev$seed,
             wholegenome = graph_genome(gg),
             mc.cores = mc.cores), settings))
     }, error = function(e) e)
     if (inherits(r, 'error')) {
-        message('[', ev$event_id, '] FAILED: ', conditionMessage(r))
-        writeLines(conditionMessage(r), event_file(ev$event_id, '.failed'))
+        message('[', ev$task_id, '] FAILED: ', conditionMessage(r))
+        writeLines(conditionMessage(r), event_file(ev$task_id, '.failed'))
     } else {
-        saveRDS(r, event_file(ev$event_id))
+        saveRDS(r, event_file(ev$task_id))
     }
     rm(r); invisible(gc())
 }
 
-failed = bundle$event_id[!file.exists(event_file(bundle$event_id))]
+failed = bundle$task_id[!file.exists(event_file(bundle$task_id))]
 if (length(failed)) stop(length(failed), ' of ', nrow(bundle), ' events failed: ', paste(failed, collapse = ', '))
 
-res = lapply(bundle$event_id, function(e) readRDS(event_file(e)))
-names(res) = bundle$event_id
+res = lapply(bundle$task_id, function(e) readRDS(event_file(e)))
+names(res) = bundle$task_id
 picks = rbindlist(lapply(res, `[[`, 'picks'), fill = TRUE)
 meta = rbindlist(lapply(res, `[[`, 'meta'), fill = TRUE)
 config = list(batch_id = batch_id, event_bundle = event_bundle, settings_file = settings_file,

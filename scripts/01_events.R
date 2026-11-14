@@ -11,7 +11,8 @@
 ## gets the same id, seed and result as in a full run; listed events of an
 ## excluded type are kept, with id <pair>_event_x<event.iid>. Extra columns of
 ## the events table go to <run_dir>/event_annotations.rds (and .tsv), which
-## 03_analyze.R joins onto its tables.
+## 03_analyze.R joins onto its tables. With truth_indices set (config.R), each
+## event gets one row per truth index (column truth_index), each with its own seed.
 ## Writes <run_dir>/events.rds (and events.tsv). An existing table is kept
 ## unless --rebuild is given: event ids and seeds must not change under a live run.
 suppressPackageStartupMessages({
@@ -84,9 +85,24 @@ if (is.finite(event_subset_n)) {
     events = events[sort(sample(.N, min(.N, event_subset_n)))]
     message('Test run: kept ', nrow(events), ' random events')
 }
-events[, seed := vapply(event_id, function(e) strtoi(substr(digest::digest(
-    paste(sample_seed, e, 'local'), algo = 'xxhash32', serialize = FALSE), 1, 7), 16L), integer(1))]
-events = events[, .(pair, event_id, cohort, type, ev.id, event.iid, identifiability_event_index, gg, footprint, seed)]
+## Truth k > 1 (truth_indices in config.R) hashes the index in too; truth 1 keeps the one-truth seed.
+event_seed = function(e, k = 1L) strtoi(substr(digest::digest(
+    paste(c(sample_seed, e, 'local', if (k != 1L) k), collapse = ' '), algo = 'xxhash32', serialize = FALSE), 1, 7), 16L)
+if (!exists('truth_indices')) truth_indices = NULL
+cols = c('pair', 'event_id', 'cohort', 'type', 'ev.id', 'event.iid', 'identifiability_event_index', 'gg', 'footprint', 'seed')
+if (is.null(truth_indices)) {
+    events[, seed := vapply(event_id, event_seed, integer(1))]
+} else {
+    truth_indices = as.integer(truth_indices)
+    if (!length(truth_indices) || anyNA(truth_indices) || any(truth_indices < 1) || anyDuplicated(truth_indices))
+        stop('truth_indices must be distinct positive integers')
+    events = events[rep(seq_len(.N), each = length(truth_indices))][, truth_index := rep(truth_indices, .N / length(truth_indices))]
+    events[, seed := mapply(event_seed, event_id, truth_index, USE.NAMES = FALSE)]
+    cols = c(cols, 'truth_index')
+    message(uniqueN(events$event_id), ' events x ', length(truth_indices), ' truths (truth_index ',
+            paste(range(truth_indices), collapse = '-'), ')')
+}
+events = events[, ..cols]
 
 saveRDS(events, out)
 fwrite(events, run_file('events.tsv'), sep = '\t')

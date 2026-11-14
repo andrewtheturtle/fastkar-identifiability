@@ -84,7 +84,8 @@ if (all(file.exists(plan_files))) {
     events[, est_min := pmax(time_scale * p90_min, 0.5)]
     events[, mem_gb := pick_tier(mem_scale * p90_rss_gb + mc_cores * fork_gb + mem_overhead_gb)]
     events[, bin := pack_events(est_min, target_job_h * 60), by = mem_gb]
-    events[, batch_id := sprintf('m%03d_%04d', as.integer(mem_gb), bin)]
+    if (!exists('batch_prefix')) batch_prefix = ''
+    events[, batch_id := sprintf('%sm%03d_%04d', batch_prefix, as.integer(mem_gb), bin)]
     jobs = events[, .(n_events = .N, est_h = sum(est_min) / 60, mem_gb = mem_gb[1]), keyby = batch_id]
     jobs[, time_h := ceiling(pmax(time_safety * est_h, est_h + time_pad_h))]
     jobs[, time := sprintf('%d-%02d', time_h %/% 24, time_h %% 24)]
@@ -92,8 +93,8 @@ if (all(file.exists(plan_files))) {
     saveRDS(settings, settings_file)
     bundle_inputs = rbindlist(lapply(split(events, by = 'batch_id'), function(dt) {
         bundle_path = file.path(bundle_dir, paste0(dt$batch_id[1], '.rds'))
-        saveRDS(dt[, .(pair, event_id, cohort, type, ev.id, event.iid, identifiability_event_index,
-                       gg, footprint, seed)], bundle_path)
+        saveRDS(dt[, intersect(c('pair', 'event_id', 'cohort', 'type', 'ev.id', 'event.iid', 'identifiability_event_index',
+                                 'gg', 'footprint', 'seed', 'truth_index'), names(dt)), with = FALSE], bundle_path)
         data.table(batch_id = dt$batch_id[1], event_bundle = bundle_path,
                    settings = settings_file, mc_cores = mc_cores)
     }))
