@@ -34,8 +34,10 @@ sample_seed = 1L
 graph_cores = 8L
 
 ## -----------------------------------------------------------------------------
-## Analysis settings, passed unchanged to fastKar:::run_graph_local_identifiability()
-## (identical to the CCLE run in the manuscript, ccle_v5_local_nearest)
+## Analysis settings, passed to fastKar:::run_graph_local_identifiability(), except conserve, which the
+## worker sets as options(fastKar.conserve) (the balanced Hi-C trans term; fastKar's default is off).
+## Identical to the CCLE run in the manuscript, ccle_v5_local_nearest, except conserve = TRUE and the
+## new Hi-C model of the pinned fastKar (see README, Reproducibility).
 ## -----------------------------------------------------------------------------
 
 settings = list(
@@ -52,7 +54,8 @@ settings = list(
     footprint_buffer_fraction = 0.2,
     footprint_buffer_min = 1e4,
     edit_mode = 'fragment',
-    longread_background = 1e-10)
+    longread_background = 1e-10,
+    conserve = TRUE)            # balanced (contact-conserving) Hi-C trans term
 
 ## -----------------------------------------------------------------------------
 ## Cluster jobs (Flow on Slurm)

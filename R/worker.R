@@ -66,6 +66,11 @@ graph_genome = function(gg) {
 }
 
 settings = readRDS(settings_file)
+# Balanced Hi-C trans term: a fastKar option, not an argument of run_graph_local_identifiability()
+# (settings saved before it existed have no conserve entry: off, as those runs were)
+options(fastKar.conserve = isTRUE(settings$conserve))
+message('fastKar.conserve = ', getOption('fastKar.conserve'))
+settings$conserve = NULL
 bundle = as.data.table(readRDS(event_bundle))
 if (!nrow(bundle)) stop('event_bundle has zero rows')
 required_cols = c('pair', 'event_id', 'cohort', 'type', 'gg', 'footprint', 'seed')

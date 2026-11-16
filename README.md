@@ -38,7 +38,7 @@ Needs R >= 4.3 with a C++ compiler, Slurm and [Flow](https://github.com/mskilab-
 ## Run
 
 Edit `config.R` (pairs table, cohort name, output directory; analysis settings default to the
-manuscript's CCLE run), then:
+manuscript's CCLE run, with the balanced Hi-C trans term on; see Reproducibility), then:
 
 ```bash
 source env.sh
@@ -134,7 +134,18 @@ resources/               CCLE per-type runtime/memory
 
 ## Reproducibility
 
-The manuscript's CCLE run (`ccle_v5_local_nearest`) used fastKar `fe6b5b5`, the commit pinned here. It keeps
+This version pins fastKar `1a83d4d` and runs with `conserve = TRUE` (`config.R`). Its Hi-C model differs from
+`fe6b5b5`, the version behind the manuscript's CCLE run `ccle_v5_local_nearest`:
+- the parameters are retrained on GM12878 kept bins, genome-wide (fastKar `scripts/modeltraining.R`);
+- the distance kernel is integrated over each pixel;
+- with `conserve = TRUE`, the inter-chromosomal term is balanced: every copy-bp has the same total contacts, so
+  copies with fewer intra-chromosomal contacts (short walks, walk ends, circles) get more trans.
+
+Candidates, edit distances, noisy-observation seeds and long-read results are unchanged (same events, seeds and
+`mc_cores`), so Hi-C results can be compared event by event with a `fe6b5b5` run. Set `conserve = FALSE` to run
+the new parameters with the old uniform trans term. Use a new `run_tag`.
+
+The manuscript's CCLE run (`ccle_v5_local_nearest`) used fastKar `fe6b5b5` (pinned here until `1a83d4d`). It keeps
 the 99 candidates nearest to the truth by edit distance (ties broken at random). Earlier commits kept a random
 99 of the swap neighbourhood, which rarely included the nearest (hardest) alternatives and made P(MLE = truth)
 depend on the size of that neighbourhood, so results from them are not comparable.
