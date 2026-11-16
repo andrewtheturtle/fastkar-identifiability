@@ -8,6 +8,10 @@
 ##   picks.rds          one row per event x assay x observation: truth rank, ties, MLE pick
 ##   event_summary.rds  one row per event x assay (means over observations), plus any
 ##                      event annotations from the events table; also .tsv
+##                      With several truths per event (truth_indices in config.R): one row
+##                      per event x truth_index x assay, plus event_summary_truth_mean.rds
+##                      (.tsv): per event x assay, p_pick averaged over the truths (one
+##                      possible way to combine them), which the plots use.
 ## Plots (in plot_dir):
 ##   identifiability_by_type.pdf   P(MLE = truth) per event type and assay
 ##   identifiability_figure.pdf    manuscript Fig. 4 layout (A simple types, B complex
@@ -52,24 +56,40 @@ picks[, assay := droplevels(assay)]
 # unique_walk: the event admits only one haploid karyotype inside the footprint,
 # so p_pick = 1 for every assay (one row per assay instead of n_obs).
 if (!'n_hap' %in% names(picks)) picks[, n_hap := n_cand] # results from fastKar before the haploid collapse
+multi_truth = 'truth_index' %in% names(picks)
 summ = picks[, .(p_pick = mean(p_pick), median_rank = median(as.numeric(truth_rank)),
                  chance = 1 / n_hap[1], n_obs = .N),
-             by = .(event_id, pair, cohort, type, assay, n_cand, n_hap, unique_walk, event_size, target_width)]
+             by = c('event_id', if (multi_truth) 'truth_index', 'pair', 'cohort', 'type', 'assay',
+                    'n_cand', 'n_hap', 'unique_walk', 'event_size', 'target_width')]
 ## Extra columns from the events table (01_events.R with events_file), e.g. a group label.
+ann_cols = character()
 if (file.exists(ann_file <- run_file('event_annotations.rds'))) {
     ann = readRDS(ann_file)
     ann = ann[, c('event_id', setdiff(names(ann), names(summ))), with = FALSE]
     summ = merge(summ, ann, by = 'event_id', all.x = TRUE, sort = FALSE)
+    ann_cols = names(ann)[-1]
     message('Joined event annotations: ', paste(names(ann)[-1], collapse = ', '))
 }
 saveRDS(picks, run_file('picks.rds'))
 saveRDS(summ, run_file('event_summary.rds'))
 fwrite(summ, run_file('event_summary.tsv'), sep = '\t')
+## Several truths per event: per-truth rows above; the plain mean over truths here (one option).
+plot_summ = summ
+if (multi_truth) {
+    plot_summ = summ[, .(p_pick = mean(p_pick), p_pick_sd = sd(p_pick), p_pick_min = min(p_pick), p_pick_max = max(p_pick),
+                         n_truths = .N, median_rank = median(median_rank), chance = mean(chance),
+                         n_cand = mean(n_cand), n_hap = mean(n_hap), unique_walk = all(unique_walk)),
+                     by = c('event_id', 'pair', 'cohort', 'type', 'assay', ann_cols)]
+    saveRDS(plot_summ, run_file('event_summary_truth_mean.rds'))
+    fwrite(plot_summ, run_file('event_summary_truth_mean.tsv'), sep = '\t')
+    message('\n', uniqueN(summ$event_id), ' events with ', min(plot_summ$n_truths), '-', max(plot_summ$n_truths),
+            ' finished truths each; tables and plots below use the mean over truths')
+}
 
 message('\nCandidate sets: ', sum(meta$unique_walk), ' events with a unique walk (p_pick = 1); median ',
         median(meta$n_cand), ' candidates')
 message('\nPer-assay means over all events:')
-print(summ[, .(events = .N, p_pick = mean(p_pick), frac_p_pick_gt_0.5 = mean(p_pick > 0.5),
+print(plot_summ[, .(events = .N, p_pick = mean(p_pick), frac_p_pick_gt_0.5 = mean(p_pick > 0.5),
                chance = mean(chance), median_rank = median(median_rank)), keyby = assay])
 
 dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
@@ -77,7 +97,7 @@ save_plot = function(p, name, width = 5, height = 3) {
     ggsave(file.path(plot_dir, paste0(name, '.pdf')), p, width = width, height = height)
     message('wrote ', file.path(plot_dir, name), '.pdf')
 }
-save_plot(ggplot(summ, aes(reorder(type, p_pick), p_pick, color = assay)) +
+save_plot(ggplot(plot_summ, aes(reorder(type, p_pick), p_pick, color = assay)) +
           geom_boxplot(aes(fill = assay), color = 'grey', alpha = 0.1) + geom_sina(size = 0.5) +
           labs(y = 'P(MLE = truth)', x = NULL, color = 'Assay') + theme_bw(),
           'identifiability_by_type', width = 10, height = 3)
@@ -85,7 +105,7 @@ save_plot(ggplot(summ, aes(reorder(type, p_pick), p_pick, color = assay)) +
 ## Manuscript Fig. 4 layout (needs the default assays: 100 kb, 10 Mb, Hi-C).
 ## qrpmin/qrppos/qrpmix are reciprocal duplications (r-dup); cpxdm is folded
 ## into dm. Types outside simple_types/complex_types appear only in the plot above.
-s = copy(summ)
+s = copy(plot_summ)
 if (!all(c('LR 100 kb', 'LR 10 Mb', 'Hi-C') %in% s$assay)) {
     message('Skipping the figure layout: it needs the 100 kb, 10 Mb and Hi-C assays')
     quit(save = 'no')

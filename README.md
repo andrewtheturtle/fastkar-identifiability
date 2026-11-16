@@ -92,6 +92,19 @@ The rest of the pipeline is unchanged (`smoke_test.R`, `02_submit.R`, `03_analyz
   `02_submit.R` reuses a saved job plan, so changing the list under an existing `run_tag` does nothing
   unless you start a new run directory.
 
+### Several truths per event (optional)
+
+Set `truth_indices` in `config.R` (e.g. `1:10`) to run each event once per truth index. Each index
+gets its own seed (from `sample_seed`, the event id and the index), and that seed drives the whole
+run of that truth: the truth draw, the candidate sampling and the observation noise. Truth 1 uses
+the one-truth seed, so a one-truth run's results are truth 1 and `truth_indices = 2:10` adds nine
+truths to it. With `truth_graph_dir`, truth k is drawn on the phased graph and mapped, so it is the
+same karyotype on every graph version. Checkpoints are `events/<event_id>_truth<k>.rds`; `picks`,
+`meta` and `event_summary` carry `truth_index`, and `03_analyze.R` also writes
+`event_summary_truth_mean.rds/.tsv` (P averaged over truths, which its plots use).
+`batch_prefix` names the jobs (`<prefix>m<mem>_<n>`), so runs that share the Slurm queue keep
+distinct job names.
+
 ### Outputs (`<out_dir>/<run_tag>/`)
 
 | file | content |
