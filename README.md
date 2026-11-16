@@ -134,7 +134,7 @@ resources/               CCLE per-type runtime/memory
 
 ## Reproducibility
 
-This version pins fastKar `1a83d4d` and runs with `conserve = TRUE` (`config.R`). Its Hi-C model differs from
+This version pins fastKar `b6c951a` and runs with `conserve = TRUE` (`config.R`). Its Hi-C model differs from
 `fe6b5b5`, the version behind the manuscript's CCLE run `ccle_v5_local_nearest`:
 - the parameters are retrained on GM12878 kept bins, genome-wide (fastKar `scripts/modeltraining.R`);
 - the distance kernel is integrated over each pixel;
@@ -142,7 +142,11 @@ This version pins fastKar `1a83d4d` and runs with `conserve = TRUE` (`config.R`)
   copies with fewer intra-chromosomal contacts (short walks, walk ends, circles) get more trans.
 
 Candidates, edit distances, noisy-observation seeds and long-read results are unchanged (same events, seeds and
-`mc_cores`), so Hi-C results can be compared event by event with a `fe6b5b5` run. Set `conserve = FALSE` to run
+`mc_cores`), so Hi-C results can be compared event by event with a `fe6b5b5` run.
+`b6c951a` also has the optional shared truth across graph versions (`truth_graph_dir`, off by default) and a
+footprint signature that keeps closed in-footprint cycles circular (rotation-invariant, and distinct from a linear
+fragment with the same nodes). The signature only merges candidates that tie; on rare events with such cycles the
+deduplicated candidate set and the haploid grouping can differ slightly from earlier pins. Set `conserve = FALSE` to run
 the new parameters with the old uniform trans term. Use a new `run_tag`.
 
 The manuscript's CCLE run (`ccle_v5_local_nearest`) used fastKar `fe6b5b5` (pinned here until `1a83d4d`). It keeps
