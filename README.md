@@ -98,7 +98,9 @@ Set `truth_indices` in `config.R` (e.g. `1:10`) to run each event once per truth
 gets its own seed (from `sample_seed`, the event id and the index), and that seed drives the whole
 run of that truth: the truth draw, the candidate sampling and the observation noise. Truth 1 uses
 the one-truth seed, so a one-truth run's results are truth 1 and `truth_indices = 2:10` adds nine
-truths to it. With `truth_graph_dir`, truth k is drawn on the phased graph and mapped, so it is the
+truths to it (run under a new `run_tag`, since a saved job plan is reused, and join the two runs' tables by
+hand: the one-truth checkpoints have no `truth_index`). With `truth_graph_dir` (add it to `settings`
+in `config.R`: a folder of phased graphs `<pair>.rds`), truth k is drawn on the phased graph and mapped, so it is the
 same karyotype on every graph version. Checkpoints are `events/<event_id>_truth<k>.rds`; `picks`,
 `meta` and `event_summary` carry `truth_index`, and `03_analyze.R` also writes
 `event_summary_truth_mean.rds/.tsv` (P averaged over truths, which its plots use).
@@ -114,7 +116,8 @@ distinct job names.
 | `plan_*.rds`, `bundles/`, `settings.rds` | job plan, per-job event bundles, analysis settings |
 | `flow/fastkar_local_identifiability/<job>/events/<event_id>.rds` | per-event result: `picks`, `meta`, `edit`, `swaps`, `hap` (haploid signatures), `nll` (NLL matrices, truth = column 1) |
 | `picks.rds` | one row per event x assay x observation (truth rank, ties, `p_pick`) |
-| `event_summary.rds/.tsv` | one row per event x assay: `p_pick` = P(MLE = truth), `chance` = 1 / `n_hap`, `n_cand`, `n_hap`, `unique_walk`, plus any event annotations |
+| `event_summary.rds/.tsv` | one row per event x assay (x `truth_index` with several truths): `p_pick` = P(MLE = truth), `chance` = 1 / `n_hap`, `n_cand`, `n_hap`, `unique_walk`, plus any event annotations |
+| `event_summary_truth_mean.rds/.tsv` | only with several truths: per event x assay, `p_pick` mean, sd, min and max over truths (used by the plots) |
 | `plots/identifiability_by_type.pdf` | P(MLE = truth) by event type and assay |
 | `plots/identifiability_figure.pdf` | manuscript Fig. 4 layout |
 
